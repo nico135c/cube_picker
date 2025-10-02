@@ -44,6 +44,13 @@ class CubePicker:
             [18.8, -7.91, -54.49, -23.02, -0.79, -14.76],  # pre-grasp
         ]
 
+        self.move_coords = {
+            "blue": [132.2, -136.9, 200.8, -178.24, -3.72, -107.17],  # D Sorting area
+            "green": [238.8, -136.9, 204.3, -169.69, -5.52, -96.52], # C Sorting area
+            "yellow": [115.8, 177.3, 210.6, 178.06, -0.92, -6.11], # A Sorting area
+            "red": [-6.9, 173.2, 201.5, 179.93, 0.63, 33.83], # B Sorting area
+        }
+
         # --- GPIO / gripper ---
         self.GPIO = GPIO
         GPIO.setwarnings(False)
@@ -138,21 +145,28 @@ class CubePicker:
             self.GPIO.output(20, 1)
             self.GPIO.output(21, 1)
 
-    def grasp(self, x, y):
+    def grasp(self, x, y, color):
         x, y = y, x
         # Pre-position
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(3)
+        
         # Approach
         self.mc.send_coords([x, y, 170.6, 179.87, -3.78, -62.75], 25, 1); t.sleep(3)
-        # Descend & close
+        
+        # Descend & grip
         self.mc.send_coords([x, y, 103.0, 179.87, -3.78, -62.75], 25, 0); t.sleep(2)
         self.set_gripper(True); t.sleep(0.5)
+        
         # Lift
         self.mc.send_coords([x, y, 170.6, 179.87, -3.78, -62.75], 25, 1); t.sleep(2)
+        
+        # Go to sorting bin
+        self.mc.send_coords(self.move_coords[color], 25); t.sleep(1)
+        self.set_gripper(False); t.sleep(4)
+
         # Return
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(2)
         self.mc.send_angles(self.move_angles[0], 25)
-        self.set_gripper(False); t.sleep(0.5)
 
     # ---------- helpers (internal) ----------
     def _detect_aruco_into_buffer(self, img):

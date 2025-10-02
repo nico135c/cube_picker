@@ -37,10 +37,10 @@ def main():
             if detected_streak > 60:
                 choice = choose_cube(cubes, centers)
                 if choice:
-                    _, (cx, cy) = choice
+                    pick, (cx, cy) = choice
                     X, Y = picker.pixel_to_robot_xy(cx, cy)
                     print(f"Picking at robot XY: ({X:.1f}, {Y:.1f})")
-                    picker.grasp(X, Y)
+                    picker.grasp(X, Y, pick)
                     t.sleep(2)
                 detected_streak = 0
 

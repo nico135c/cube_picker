@@ -9,8 +9,7 @@ It is developed as part of my work as a **student helper at the Department of Ma
 - Commands the myCobot to move and **grasp the chosen cube** with a fixed pick strategy.  
 
 ## Planned Features
-- Integrate a **large language model (LLM)** interface so the user can simply **talk to the robot** in natural language instead of entering commands.  
-- Extend to more flexible perception (e.g., shapes, object IDs) and smarter grasp planning.  
+- Integrate a **large language model (LLM)** interface so the user can simply **talk to the robot** in natural language instead of entering commands.   
 
 ## Purpose
 This repository serves as a starting point for combining **computer vision**, **robotics**, and **AI-driven interaction** on a low-cost collaborative arm.  

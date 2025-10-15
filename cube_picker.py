@@ -63,6 +63,7 @@ class CubePicker:
         # --- Robot init ---
         port = serial_port or os.popen("ls /dev/ttyAMA*").readline().strip()
         self.mc = MyCobot280(port, baud)
+        self.mc.power_on()
         self.mc.send_angles(self.move_angles[0], 20)
         t.sleep(2.5)
 
@@ -146,6 +147,7 @@ class CubePicker:
             self.GPIO.output(21, 1)
 
     def grasp(self, x, y, color):
+        print(f"[GRASP] Grasping {color} object at position ({x},{y})")
         x, y = y, x
         # Pre-position
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(3)

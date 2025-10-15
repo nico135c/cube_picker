@@ -1,17 +1,22 @@
 import cv2
 import time as t
 from cube_picker import CubePicker
-
-def choose_cube(cubes, centers):
-    print("Detected cubes:", list(zip(cubes, centers)))
-    pick = input("Which color to pick? (color/none) ").strip().lower()
-    if pick == "none" or pick not in cubes:
-        return None
-    idx = cubes.index(pick)
-    return pick, centers[idx]
+from llm_grasp_selector import LLMGraspSelector
+from vosk_stt import VoskSTT
+from tts import BlockingTTS
 
 def main():
     picker = CubePicker(camera_index=0)
+    stt = VoskSTT()
+    tts = BlockingTTS()
+    try:
+        selector = LLMGraspSelector()
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        print("\nPlease set your OpenRouter API key:")
+        print("  export OPENROUTER_API_KEY='your-api-key-here'")
+        return
+
     try:
         print("Initializing…")
         picker.initialize(init_frames=12)
@@ -35,12 +40,31 @@ def main():
                 detected_streak = 0
 
             if detected_streak > 60:
-                choice = choose_cube(cubes, centers)
-                if choice:
-                    pick, (cx, cy) = choice
+                print("=== LLM-Based Grasp Selector ===\n")
+                tts.speak(f"I have detected {len(cubes)} cubes")
+                for idx, (cube, center) in enumerate(zip(cubes, centers)):
+                    tts.speak(f"A {cube} cube at point {center}")
+                tts.speak("Which cube or cubes do you want to pick?")
+                user_command = stt.speech_to_text_vosk()
+                #user_command = input("\nEnter your command (or 'quit' to exit): ").strip()
+            
+                if user_command.lower() in ['quit', 'exit', 'q']:
+                    print("Exiting...")
+                    break
+                
+                if not user_command:
+                    continue
+
+                user_response, actions = selector.select_objects(cubes, centers, user_command)
+
+                tts.speak(user_response)
+
+                print(f"\n[EXECUTING] {len(actions)} action(s)")
+                for idx, (color, center) in enumerate(actions):
+                    print(f"\n--- Step {idx}/{len(actions)} ---")
+                    cx, cy = center
                     X, Y = picker.pixel_to_robot_xy(cx, cy)
-                    print(f"Picking at robot XY: ({X:.1f}, {Y:.1f})")
-                    picker.grasp(X, Y, pick)
+                    picker.grasp(X, Y, color)
                     t.sleep(2)
                 detected_streak = 0
 

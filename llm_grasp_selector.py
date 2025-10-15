@@ -52,7 +52,7 @@ class LLMGraspSelector:
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
         )
-        self.model = "deepseek/deepseek-chat-v3.1:free"
+        self.model = "z-ai/glm-4.5-air:free"
     
     def select_objects(self, objects, centers, user_command):
         """
@@ -149,14 +149,14 @@ Which object(s) should be grasped and in what order?"""
             )
             
             # Accumulate the streamed response
-            print("\n[LLM Response]")
+            #print("\n[LLM Response]")
             response_text = ""
             for chunk in stream:
                 if chunk.choices[0].delta.content is not None:
                     content = chunk.choices[0].delta.content
-                    print(content, end="", flush=True)
+                    #print(content, end="", flush=True)
                     response_text += content
-            print("\n")  # Add newline after streaming completes
+            #print("\n")  # Add newline after streaming completes
             
             response_text = response_text.strip()
             
@@ -175,10 +175,10 @@ Which object(s) should be grasped and in what order?"""
             reasoning = response_data.get("reasoning", "No reasoning provided")
             
             # Display the friendly response to the user
-            if user_response:
-                print(f"\n[ASSISTANT] {user_response}\n")
+            #if user_response:
+                #print(f"\n[ASSISTANT] {user_response}\n")
             
-            print(f"[TECHNICAL] {reasoning}")
+            #print(f"[TECHNICAL] {reasoning}")
             
             if not actions:
                 print("[INFO] No valid objects selected")
@@ -195,13 +195,13 @@ Which object(s) should be grasped and in what order?"""
                     # Validate the index
                     if 0 <= index < len(objects):
                         selected_actions.append((color, center))
-                        print(f"[ACTION {action_idx + 1}] {color} at {center}")
+                        #print(f"[ACTION {action_idx + 1}] {color} at {center}")
                     else:
                         print(f"[ERROR] Invalid index {index} in action {action_idx + 1}")
                 else:
                     print(f"[ERROR] Incomplete action data in action {action_idx + 1}")
             
-            return selected_actions
+            return user_response, selected_actions
                 
         except json.JSONDecodeError as e:
             print(f"[ERROR] Failed to parse LLM response as JSON: {e}")
@@ -210,4 +210,3 @@ Which object(s) should be grasped and in what order?"""
         except Exception as e:
             print(f"[ERROR] LLM call failed: {e}")
             return []
-

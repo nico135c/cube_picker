@@ -3,12 +3,12 @@ import time as t
 from cube_picker import CubePicker
 from llm_grasp_selector import LLMGraspSelector
 from vosk_stt import VoskSTT
-from tts import BlockingTTS
+from tts import TTS
 
 def main():
     picker = CubePicker(camera_index=0)
     stt = VoskSTT()
-    tts = BlockingTTS()
+    tts = TTS()
     try:
         selector = LLMGraspSelector()
     except ValueError as e:

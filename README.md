@@ -18,3 +18,6 @@ It is intended both as a practical robotics project and as a demonstration of in
 ## Code Attribution
 Some parts of this code are adapted from the official Elephant Robotics examples:  
 [elephantrobotics/mycobot_ros – aikit_280_pi/scripts](https://github.com/elephantrobotics/mycobot_ros/tree/noetic/mycobot_ai/aikit_280_pi/scripts)
+
+## Piper TTS
+All the information for the TTS i used can be found [here](https://github.com/OHF-Voice/piper1-gpl)

@@ -30,7 +30,7 @@ class VoskSTT:
         self.q.put(bytes(indata))
 
     def speech_to_text_vosk(self):
-        print(f"[VOSK STT] Speach-to-text listening!")
+        print(f"[VOSK STT] Speech-to-text listening!")
         with sd.RawInputStream(samplerate=self.samplerate, blocksize=self.blocksize, device=self.device,
                                dtype="int16", channels=1, callback=self.callback):
             rec = KaldiRecognizer(self.model, self.samplerate)
@@ -43,6 +43,6 @@ class VoskSTT:
                     if (stt_results != "") and (stt_results != 'huh'):
                         break
             
-            print(f"[VOSK STT] Speach-to-text done listening!")
+            print(f"[VOSK STT] Speech-to-text done listening!")
             return stt_results
 

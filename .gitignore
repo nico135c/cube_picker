@@ -2,4 +2,4 @@ output.wav
 
 voices/*
 !voices/.gitkeep
-
+__pycache__/

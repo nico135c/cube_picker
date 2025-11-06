@@ -111,9 +111,10 @@ class CubePicker:
         cropped = cv2.resize(cropped, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         return cropped
 
-    def detect_cubes(self, img):
+    def detect_objects(self, img):
+        objects, centers = [], []
+        # --- DETECTING CUBES ---
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        cubes_detected, centers = [], []
         for color, (lower, upper) in self.HSV.items():
             rgb = self.colors[color]
             mask = cv2.inRange(hsv, lower, upper)
@@ -125,9 +126,9 @@ class CubePicker:
                     cv2.rectangle(img, (x, y), (x + w, y + h), rgb, 2)
                     cx, cy = (x + w // 2, y + h // 2)
                     cv2.circle(img, (cx, cy), 3, (255, 255, 255), -1)
-                    cubes_detected.append(color)
+                    objects.append(f"{color} cube")
                     centers.append([cx, cy])
-        return cubes_detected, centers
+        return objects, centers
 
     def pixel_to_robot_xy(self, x, y):
         if self.M is None:
@@ -146,8 +147,8 @@ class CubePicker:
             self.GPIO.output(20, 1)
             self.GPIO.output(21, 1)
 
-    def grasp(self, x, y, color):
-        print(f"[GRASP] Grasping {color} object at position ({x},{y})")
+    def grasp(self, x, y, obj):
+        print(f"[GRASP] Grasping {obj} at position ({x},{y})")
         x, y = y, x
         # Pre-position
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(3)
@@ -156,15 +157,25 @@ class CubePicker:
         self.mc.send_coords([x, y, 170.6, 179.87, -3.78, -62.75], 25, 1); t.sleep(3)
         
         # Descend & grip
-        self.mc.send_coords([x, y, 103.0, 179.87, -3.78, -62.75], 25, 0); t.sleep(2)
+        # Check if object is a cube, adjust gripping depth accordingly
+        if "cube" in obj.lower():
+            self.mc.send_coords([x, y, 103.0, 179.87, -3.78, -62.75], 25, 0); t.sleep(2)
+        else:
+            self.mc.send_coords([x, y, 65, 179.87, -3.78, -62.75], 25, 0); t.sleep(2)
+        
+        
         self.set_gripper(True); t.sleep(0.5)
         
         # Lift
         self.mc.send_coords([x, y, 170.6, 179.87, -3.78, -62.75], 25, 1); t.sleep(2)
         
         # Go to sorting bin
-        self.mc.send_coords(self.move_coords[color], 25); t.sleep(1)
-        self.set_gripper(False); t.sleep(4)
+        if "cube" in obj.lower():
+            self.mc.send_coords(self.move_coords[obj.replace(" cube", "")], 25); t.sleep(0.5)
+            self.set_gripper(False); t.sleep(4.5)
+        else: 
+            self.mc.send_coords(self.move_coords["yellow"], 25)
+            self.set_gripper(False); t.sleep(7)
 
         # Return
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(2)

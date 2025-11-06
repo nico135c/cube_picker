@@ -3,12 +3,12 @@ import time as t
 from cube_picker import CubePicker
 from llm_grasp_selector import LLMGraspSelector
 from vosk_stt import VoskSTT
-from tts import TTS
+from tts import BlockingTTS
 
 def main():
     picker = CubePicker(camera_index=0)
     stt = VoskSTT()
-    tts = TTS()
+    tts = BlockingTTS()
     try:
         selector = LLMGraspSelector()
     except ValueError as e:
@@ -24,7 +24,7 @@ def main():
         picker.calibrate(calib_frames=60)
         print("Ready.")
 
-        detected_streak = 0
+        detect = False
         while True:
             ok, frame = picker.cap.read()
             frame = cv2.rotate(frame, cv2.ROTATE_180)
@@ -32,21 +32,17 @@ def main():
                 continue
 
             frame = picker.crop_frame(frame)
-            cubes, centers = picker.detect_cubes(frame)
 
-            if cubes:
-                detected_streak += 1
-            else:
-                detected_streak = 0
-
-            if detected_streak > 60:
+            if detect:
+                objects, centers = picker.detect_objects(frame)
                 print("=== LLM-Based Grasp Selector ===\n")
-                tts.speak(f"I have detected {len(cubes)} cubes")
-                for idx, (cube, center) in enumerate(zip(cubes, centers)):
-                    tts.speak(f"A {cube} cube at point {center}")
-                tts.speak("Which cube or cubes do you want to pick?")
-                user_command = stt.speech_to_text_vosk()
-                #user_command = input("\nEnter your command (or 'quit' to exit): ").strip()
+                tts.speak(f"I have detected {len(objects)} objects")
+                for idx, (obj, center) in enumerate(zip(objects, centers)):
+                    tts.speak(f"A {obj} at point {center}")
+                
+                tts.speak("Which object or objects do you want to pick?")
+                #user_command = stt.speech_to_text_vosk()
+                user_command = input()
             
                 if user_command.lower() in ['quit', 'exit', 'q']:
                     print("Exiting...")
@@ -55,22 +51,42 @@ def main():
                 if not user_command:
                     continue
 
-                user_response, actions = selector.select_objects(cubes, centers, user_command)
+                user_response, actions = selector.select_objects(objects, centers, user_command)
 
                 tts.speak(user_response)
 
                 print(f"\n[EXECUTING] {len(actions)} action(s)")
-                for idx, (color, center) in enumerate(actions):
-                    print(f"\n--- Step {idx}/{len(actions)} ---")
-                    cx, cy = center
-                    X, Y = picker.pixel_to_robot_xy(cx, cy)
-                    picker.grasp(X, Y, color)
-                    t.sleep(2)
-                detected_streak = 0
-
+                for idx, (obj, center) in enumerate(actions):
+                    print(f"\n--- Step {idx + 1}/{len(actions)} ---")
+                    picked = False
+                    while not picked:
+                        cx, cy = center
+                        X, Y = picker.pixel_to_robot_xy(cx, cy)
+                        picker.grasp(X, Y, obj)
+                        # CHECK IF OBJECT WAS ACTUALLY PICKED
+                        _, new_frame = picker.cap.read()
+                        new_frame = cv2.rotate(new_frame, cv2.ROTATE_180)
+                        new_objects, new_centers = picker.detect_objects(new_frame)
+                        print(f"\n[INFO] Remaining objects after picking: {new_objects}")
+                        if obj not in new_objects:
+                            print(f"\n[INFO] Succesfully picked object: {obj}")
+                            picked = True
+                        else:
+                            center = new_centers[new_objects.index(obj)]
+                            print(f"\n[INFO] Failed to pick object: {obj}. Trying again with new center: {center}.")
+                            picked = True
+                        t.sleep(2)
+                
+                detect = False
+            
             cv2.imshow("Cropped", frame)
-            if cv2.waitKey(1) == 27:  # ESC
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27:  # ESC
                 break
+            
+            if key == ord('s'):
+                detect = True
+                
 
     finally:
         picker.close()

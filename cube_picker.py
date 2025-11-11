@@ -7,7 +7,7 @@ import RPi.GPIO as GPIO
 
 
 class CubePicker:
-    def __init__(self, serial_port=None, baud=1_000_000, camera_index=0):
+    def __init__(self, serial_port=None, baud=1000000, camera_index=0, yolo_onnx_path=None, coco_names_path=None):
         # --- Hardware handles ---
         self.mc = None
         self.cap = None
@@ -37,6 +37,25 @@ class CubePicker:
             "yellow": [91, 196, 204],
             "red":    [82, 100, 197],
         }
+
+        # --- YOLOv5 (OpenCV DNN) ---
+        default_root = os.path.dirname(os.path.abspath(__file__))
+        self.yolo_onnx_path = yolo_onnx_path or os.path.join(default_root, "yolov5s.onnx")
+        self.coco_names_path = coco_names_path or os.path.join(default_root, "coco.names")
+
+        self.INPUT_WIDTH = 640
+        self.INPUT_HEIGHT = 640
+        self.CONFIDENCE_THRESHOLD = 0.45
+        self.SCORE_THRESHOLD = 0.50
+        self.NMS_THRESHOLD = 0.45
+
+        try:
+            with open(self.coco_names_path, "r") as f:
+                self.coco_classes = [ln.strip() for ln in f.readlines() if ln.strip()]
+        except Exception:
+            self.coco_classes = None
+
+        self.yolo_net = cv2.dnn.readNet(self.yolo_onnx_path)
 
         # --- Motion presets ---
         self.move_angles = [
@@ -104,15 +123,18 @@ class CubePicker:
         self._finalize_aruco_and_affine()
 
     # ========== Vision ==========
-    def crop_frame(self, frame):
+    def crop_frame(self, img):
         x_min, x_max = sorted([self.c1X, self.c2X])
         y_min, y_max = sorted([self.c1Y, self.c2Y])
-        cropped = frame[y_min:y_max, x_min:x_max]
+        cropped = img[y_min:y_max, x_min:x_max]
         cropped = cv2.resize(cropped, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         return cropped
 
-    def detect_objects(self, img):
+    def detect_objects(self, img, center_threshold=2):
         objects, centers = [], []
+        annotated_frame = img.copy()
+        cube_boxes = []  # store bounding boxes for cubes (x, y, w, h)
+
         # --- DETECTING CUBES ---
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         for color, (lower, upper) in self.HSV.items():
@@ -123,12 +145,49 @@ class CubePicker:
             for c in contours:
                 if cv2.contourArea(c) > 10000:
                     x, y, w, h = cv2.boundingRect(c)
-                    cv2.rectangle(img, (x, y), (x + w, y + h), rgb, 2)
+                    cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), rgb, 2)
                     cx, cy = (x + w // 2, y + h // 2)
-                    cv2.circle(img, (cx, cy), 3, (255, 255, 255), -1)
+                    cv2.circle(annotated_frame, (cx, cy), 3, (255, 255, 255), -1)
+                    cv2.putText(annotated_frame, f"{color} cube", (x, max(0, y - 6)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 2, cv2.LINE_AA)
                     objects.append(f"{color} cube")
                     centers.append([cx, cy])
-        return objects, centers
+                    cube_boxes.append((x, y, w, h))
+
+        # --- DETECTING YOLO OBJECTS ---
+        detections = self._yolo_infer(img)
+
+        for (left, top, width, height, score, class_id) in detections:
+            # Get YOLO class name
+            if self.coco_classes and 0 <= class_id < len(self.coco_classes):
+                name = self.coco_classes[class_id]
+            else:
+                name = f"class_{class_id}"
+
+            cx, cy = left + width // 2, top + height // 2
+
+            # --- FILTER: skip YOLO objects whose center lies inside any cube bounding box ---
+            skip = False
+            for (x, y, w, h) in cube_boxes:
+                if (x - center_threshold) <= cx <= (x + w + center_threshold) and \
+                (y - center_threshold) <= cy <= (y + h + center_threshold):
+                    skip = True
+                    break
+
+            if skip:
+                continue  # skip YOLO detection inside a cube region
+
+            # Draw YOLO detection
+            cv2.rectangle(annotated_frame, (left, top), (left + width, top + height), (0, 255, 255), 2)
+            cv2.circle(annotated_frame, (cx, cy), 3, (255, 255, 255), -1)
+            cv2.putText(annotated_frame, f"{name}", (left, max(0, top - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
+
+            objects.append(name)
+            centers.append([cx, cy])
+
+        return objects, centers, annotated_frame
+
 
     def pixel_to_robot_xy(self, x, y):
         if self.M is None:
@@ -223,3 +282,54 @@ class CubePicker:
         if M is None:
             raise RuntimeError("Failed to compute affine transform.")
         self.M = M
+    
+    def _yolo_blob(self, img):
+        # Letterbox-free simple resize; YOLOv5 ONNX exported head expects 640x640
+        blob = cv2.dnn.blobFromImage(
+            img, scalefactor=1/255.0, size=(self.INPUT_WIDTH, self.INPUT_HEIGHT),
+            mean=(0,0,0), swapRB=True, crop=False
+        )
+        return blob
+
+    def _yolo_infer(self, img):
+        """
+        Returns list of (left, top, width, height, confidence, class_id)
+        in original image coordinates, after NMS.
+        """
+        h, w = img.shape[:2]
+        blob = self._yolo_blob(img)
+        self.yolo_net.setInput(blob)
+        outs = self.yolo_net.forward(self.yolo_net.getUnconnectedOutLayersNames())
+        # YOLOv5 ONNX: outs[0] shape [1, N, 85]
+        detections = outs[0][0]
+        boxes, scores, class_ids = [], [], []
+
+        x_factor = w / self.INPUT_WIDTH
+        y_factor = h / self.INPUT_HEIGHT
+
+        for det in detections:
+            obj_conf = float(det[4])
+            if obj_conf < self.CONFIDENCE_THRESHOLD:
+                continue
+            class_scores = det[5:]
+            cid = int(np.argmax(class_scores))
+            cls_score = float(class_scores[cid])
+            if cls_score < self.SCORE_THRESHOLD:
+                continue
+
+            cx, cy, bw, bh = det[0], det[1], det[2], det[3]
+            left   = int((cx - bw/2) * x_factor)
+            top    = int((cy - bh/2) * y_factor)
+            width  = int(bw * x_factor)
+            height = int(bh * y_factor)
+
+            boxes.append([left, top, width, height])
+            scores.append(obj_conf * cls_score)
+            class_ids.append(cid)
+
+        if not boxes:
+            return []
+
+        idxs = cv2.dnn.NMSBoxes(boxes, scores, self.CONFIDENCE_THRESHOLD, self.NMS_THRESHOLD)
+        idxs = idxs.flatten().tolist() if len(idxs) else []
+        return [(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], scores[i], class_ids[i]) for i in idxs]

@@ -2,7 +2,8 @@ import argparse
 import queue
 import sys
 import sounddevice as sd
-from vosk import Model, KaldiRecognizer
+from vosk import Model, KaldiRecognizer, SetLogLevel
+SetLogLevel(-1)
 
 class VoskSTT:
     def __init__(self):

@@ -207,7 +207,7 @@ class CubePicker:
             self.GPIO.output(21, 1)
 
     def grasp(self, x, y, obj):
-        print(f"[GRASP] Grasping {obj} at position ({x},{y})")
+        print(f"[GRASP] Grasping the {obj}")
         x, y = y, x
         # Pre-position
         self.mc.send_angles(self.move_angles[1], 25); t.sleep(3)

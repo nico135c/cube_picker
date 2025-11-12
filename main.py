@@ -24,6 +24,7 @@ def main():
         picker.calibrate(calib_frames=60)
         print("Ready.")
 
+        tts.speak("Ready to detect objects")
         detect = False
         while True:
             ok, frame = picker.cap.read()
@@ -43,7 +44,7 @@ def main():
                 
                 if len(objects) > 0:
                     for idx, (obj, center) in enumerate(zip(objects, centers)):
-                        tts.speak(f"A {obj} at point {center}")
+                        tts.speak(f"A {obj}")
                     
                     tts.speak("Which object or objects do you want to pick?")
                     #user_command = stt.speech_to_text_vosk()
@@ -93,6 +94,7 @@ def main():
                             
                             t.sleep(2)
                     
+                tts.speak("Ready to detect objects")
                 detect = False
             
             cv2.imshow("Camera", frame)

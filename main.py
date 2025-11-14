@@ -47,8 +47,8 @@ def main():
                         tts.speak(f"A {obj}")
                     
                     tts.speak("Which object or objects do you want to pick?")
-                    #user_command = stt.speech_to_text_vosk()
-                    user_command = input()
+                    user_command = stt.speech_to_text_vosk()
+                    #user_command = input()
                 
                     if user_command.lower() in ['quit', 'exit', 'q']:
                         print("Exiting...")

@@ -49,38 +49,34 @@ class LLM_Agent:
                 if retries < self.max_retries:
                     retries += 1
                     continue
-                raise print("Request timed out.")
+                raise Exception("Request timed out.")
 
             except requests.ConnectionError:
                 if retries < self.max_retries:
                     retries += 1
                     continue
-                raise print("Connection error.")
+                raise Exception("Connection error.")
 
             except requests.RequestException as e:
                 if retries < self.max_retries:
                     retries += 1
                     continue
-                raise print(str(e))
+                raise Exception(str(e))
 
             except json.JSONDecodeError as e:
                 if retries < self.max_retries:
                     retries += 1
                     continue
-                raise print(f"JSON decode error: {e}")
+                raise Exception(f"JSON decode error: {e}")
 
     # ---------------------------------------------------------
     # Internal networking helpers
     # ---------------------------------------------------------
     def _stream_response(self, message: dict, timeout: float) -> str:
-        """
-        Streams token chunks from model and returns the final concatenated result.
-        """
-
         collected = ""
 
         with requests.post(self.llm_url, data=json.dumps(message), stream=True, timeout=timeout) as r:
-            for raw_line in r.iter_lines(decode_unicode=True, delimiter=b'\n'):
+            for raw_line in r.iter_lines(decode_unicode=True):
                 if not raw_line:
                     continue
 
@@ -89,15 +85,14 @@ class LLM_Agent:
                 except json.JSONDecodeError:
                     continue
 
-                # streaming token chunks
                 if "response" in event:
                     collected += event["response"]
 
-                # done
                 if event.get("done", False):
                     break
 
         return collected
+
 
     # ---------------------------------------------------------
     # Parsing helpers
